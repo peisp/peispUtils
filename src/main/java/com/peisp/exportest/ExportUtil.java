@@ -1,7 +1,8 @@
 package com.peisp.exportest;
 
 import com.alibaba.excel.EasyExcel;
-import com.alibaba.excel.write.builder.ExcelWriterBuilder;
+import com.alibaba.excel.ExcelWriter;
+import com.alibaba.excel.write.metadata.WriteSheet;
 import com.alibaba.excel.write.metadata.style.WriteCellStyle;
 import com.alibaba.excel.write.metadata.style.WriteFont;
 import com.alibaba.excel.write.style.HorizontalCellStyleStrategy;
@@ -9,6 +10,7 @@ import org.apache.poi.ss.usermodel.FillPatternType;
 import org.apache.poi.ss.usermodel.IndexedColors;
 
 import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
 import java.util.*;
 
 /**
@@ -20,93 +22,89 @@ public class ExportUtil {
     /**
      * 根据数据生成 Excel ，写入到项目路径下
      * 默认表头为 index(0) 的 map 中的key
-     * @param maps 数据
+     * @param excelSheets 数据
      * @return String 生成的文件路径
      */
-    public static String createExcelByData(List<Map<String, Object>> maps) throws Exception {
-        return createExcelByData(maps, FileUtil.getPath(),null,null);
+    public static String createExcelByData(ExcelSheet... excelSheets) throws Exception {
+        return createExcelByDataCore(FileUtil.getPath(),null,null,excelSheets);
     }
 
     /**
      * 根据数据生成 Excel ，写入到指定路径下
      * 默认表头为 index(0) 的 map 中的key
-     * @param maps 数据
+     * @param excelSheets 数据
      * @param path 指定的路径
      * @return String 生成的文件路径
      * @throws Exception
      */
-    public static String createExcelByData(List<Map<String, Object>> maps,String path) throws Exception {
+    public static String createExcelByData(String path, ExcelSheet... excelSheets) throws Exception {
         if (path == null){
-            return createExcelByData(maps);
+            return createExcelByData(excelSheets);
         }
-        return createExcelByData(maps,path,null,null);
+        return createExcelByDataCore(path,null,null,excelSheets);
     }
 
 
     /**
      * 根据数据生成 Excel ，写入到 response
      * 默认表头为 index(0) 的 map 中的key
-     * @param maps 数据
+     * @param excelSheets 数据
      * @param response 响应
      * @throws Exception
      */
-    public static void createExcelByData(List<Map<String, Object>> maps, HttpServletResponse response) throws Exception {
-        createExcelByData(maps, FileUtil.getPath(),response,null);
+    public static void createExcelByData(HttpServletResponse response, ExcelSheet... excelSheets) throws Exception {
+        createExcelByDataCore(FileUtil.getPath(),response,null,excelSheets);
     }
 
     /**
      * 根据数据及属性生成 Excel ，写入到项目路径下
      * 默认表头为 index(0) 的 map 中的key
-     * @param maps 数据
+     * @param excelSheets 数据
      * @param excelProperties excel属性
      * @return 生成的文件地址
      * @throws Exception
      */
-    public static String createExcelByData(List<Map<String, Object>> maps, ExcelProperties excelProperties) throws Exception {
-        return createExcelByData(maps, FileUtil.getPath(),null,excelProperties);
+    public static String createExcelByData(ExcelProperties excelProperties, ExcelSheet... excelSheets) throws Exception {
+        return createExcelByDataCore(FileUtil.getPath(),null,excelProperties,excelSheets);
     }
 
     /**
      * 根据数据及属性生成 Excel ，写入到 response
      * 默认表头为 index(0) 的 map 中的key* @param maps
-     * @param maps 数据
+     * @param excelSheets 数据
      * @param response 响应
      * @param excelProperties excel 属性
      * @throws Exception
      */
-    public static void createExcelByData(List<Map<String, Object>> maps, HttpServletResponse response, ExcelProperties excelProperties) throws Exception {
-        createExcelByData(maps,null,response,excelProperties);
+    public static void createExcelByData(HttpServletResponse response, ExcelProperties excelProperties, ExcelSheet... excelSheets) throws Exception {
+        createExcelByDataCore(null,response,excelProperties,excelSheets);
     }
 
 
     /**
      * 根据数据及属性生成 Excel ，写入到指定路径下
      * 默认表头为 index(0) 的 map 中的key* @param maps
-     * @param maps 数据
+     * @param excelSheets 数据
      * @param path 指定的文件路径
      * @param excelProperties excel 属性
      * @throws Exception
      */
-    public static void responseWriteExcelByData(List<Map<String, Object>> maps, String path, ExcelProperties excelProperties) throws Exception {
-        createExcelByData(maps,path,null,excelProperties);
+    public static void responseWriteExcelByData(String path, ExcelProperties excelProperties, ExcelSheet... excelSheets) throws Exception {
+        createExcelByDataCore(path,null,excelProperties,excelSheets);
     }
-
 
     /**
      * 导出核心方法
      * 根据数据生成 Excel ，写入到指定的路径。 默认表头为 index(0) 的 map 中的key
-     * @param maps 数据
      * @param path 文件路径，为空时，生成在项目路径下(HttpServletResponse 不空时生效)
      * @param response HttpServletResponse 不为空时，将文件写到 HttpServletResponse
      * @param excelProperties 属性
+     * @param excelSheets 数据
      * @return 生成的文件路径
      */
-    private static String createExcelByData(List<Map<String, Object>> maps, String path, HttpServletResponse response, ExcelProperties excelProperties) throws Exception {
+    private static String createExcelByDataCore(String path, HttpServletResponse response, ExcelProperties excelProperties, ExcelSheet... excelSheets) {
         excelProperties = excelProperties == null ? new ExcelProperties() : excelProperties;
-        // 获取表头
-        List<List<String>> head = getHead(maps.get(0));
-        // 转换数据
-        List<List<Object>> data2Wlist = data2Wlist(maps);
+
 
         // 写数据
         String fileName = path +
@@ -135,18 +133,45 @@ public class ExportUtil {
         // 这个策略是 头是头的样式 内容是内容的样式 其他的策略可以自己实现
         HorizontalCellStyleStrategy horizontalCellStyleStrategy = new HorizontalCellStyleStrategy(headWriteCellStyle, contentWriteCellStyle);
 
+        ExcelWriter excelWriter = null;
+        try {
+            if (response == null){
+                excelWriter = EasyExcel.write(fileName).build();
+            }else {
+                excelWriter = EasyExcel.write(response.getOutputStream()).build();
+            }
 
-        // 这里 需要指定写用哪个class去写，然后写到第一个sheet，名字为模板 然后文件流会自动关闭
-        ExcelWriterBuilder write;
-        if (response == null){
-            write = EasyExcel.write(fileName);
-        }else {
-            write = EasyExcel.write(response.getOutputStream());
+            for (int i = 0; i < excelSheets.length; i++) {
+                ExcelSheet excelSheet = excelSheets[i];
+
+                if (excelSheet.getSheetData() == null){
+                    throw new NullPointerException("Waiting for the data to be empty");
+                }
+
+                // 获取表头
+                List<List<String>> head = getHead(excelSheet.getSheetData().get(0));
+                // 转换数据
+                List<List<Object>> data2Wlist = data2Wlist(excelSheet.getSheetData());
+
+                // sheet 名称
+                String sheetName = excelSheet.getSheetName() == null ? "sheet" + (i + 1) : excelSheet.getSheetName();
+
+                // 每次都要创建writeSheet 这里注意必须指定sheetNo 而且sheetName必须不一样。这里注意DemoData.class 可以每次都变，我这里为了方便 所以用的同一个class 实际上可以一直变
+                WriteSheet writeSheet = EasyExcel.writerSheet(i, sheetName)
+                        .head(head)
+                        .registerWriteHandler(horizontalCellStyleStrategy)
+                        .build();
+                excelWriter.write(data2Wlist, writeSheet);
+
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            if (excelWriter != null) {
+                excelWriter.finish();
+
+            }
         }
-        write.head(head)
-                .sheet(excelProperties.getSheetName() == null ? "sheet1" : excelProperties.getSheetName())
-                .registerWriteHandler(horizontalCellStyleStrategy)
-                .doWrite(data2Wlist);
         return response == null ? fileName : null;
     }
 
@@ -184,4 +209,7 @@ public class ExportUtil {
         });
         return list;
     }
+
+
+
 }
