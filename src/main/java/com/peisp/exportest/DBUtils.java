@@ -63,19 +63,25 @@ public class DBUtils {
     private static void close(Connection con, PreparedStatement sta, ResultSet rs) {
 
         try {
-            if (rs != null) rs.close();
+            if (rs != null) {
+                rs.close();
+            }
         } catch (Exception e) {
             e.printStackTrace();
         }
 
         try {
-            if (sta != null) sta.close();
+            if (sta != null) {
+                sta.close();
+            }
         } catch (Exception e) {
             e.printStackTrace();
         }
 
         try {
-            if (con != null) con.close();
+            if (con != null) {
+                con.close();
+            }
         } catch (Exception e) {
             e.printStackTrace();
         }
