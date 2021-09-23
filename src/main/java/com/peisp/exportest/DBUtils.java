@@ -18,13 +18,20 @@ public class DBUtils {
      * @return
      */
     public static List<Map<String, Object>> getSqlData(DataSource dataSource) {
-        try (
-                Connection connection = getConnection(dataSource.getDriverClassName(), dataSource.getUrl(), dataSource.getUsername(), dataSource.getPassword());
-                 // 创建代表sql语句的对象
-                Statement statement = connection.createStatement();
-                // 执行sql语句
-                ResultSet resultSet = statement.executeQuery(dataSource.getSql());
-            ){
+
+        Connection connection = null;
+        PreparedStatement preparedStatement  = null;
+        ResultSet resultSet = null;
+        try {
+            connection = getConnection(dataSource.getDriverClassName(), dataSource.getUrl(), dataSource.getUsername(), dataSource.getPassword());
+            // 创建代表sql语句的对象
+            preparedStatement = connection.prepareStatement(dataSource.getSql());
+            for (int i = 0; i < dataSource.getSqlParams().length; i++) {
+                preparedStatement.setObject(i + 1,dataSource.getSqlParams()[i]);
+            }
+            // 执行sql语句
+            resultSet = preparedStatement.executeQuery();
+
             // 获取结果集
             ResultSetMetaData metaData = resultSet.getMetaData();
             int columnCount = metaData.getColumnCount();
@@ -40,13 +47,39 @@ public class DBUtils {
             }
             return list;
 
-        } catch (SQLException | ClassNotFoundException throwables) {
-            throwables.printStackTrace();
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            close(connection,preparedStatement,resultSet);
         }
-
         return null;
     }
+    /**
+     *  关闭数据连接
+     * @param con
+     * @param sta
+     * @param rs    //针对查询
+     */
+    private static void close(Connection con, PreparedStatement sta, ResultSet rs) {
 
+        try {
+            if (rs != null) rs.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        try {
+            if (sta != null) sta.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        try {
+            if (con != null) con.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
     private static Connection getConnection(String driverClassName, String url, String username, String passwd) throws ClassNotFoundException, SQLException {
         //1.加载驱动程序
         Class.forName(driverClassName);
